@@ -1,0 +1,28 @@
+# Render deployment configuration for DV Sentinel
+services:
+  - type: web
+    name: dv-sentinel
+    env: docker
+    plan: free
+    region: oregon
+    
+    # Environment variables (set in Render dashboard, not here)
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: PYTHONUNBUFFERED
+        value: 1
+      - key: CASPIAN_API_KEY
+        sync: false
+      - key: CASPIAN_BASE_URL
+        value: https://api.trycaspianai.com
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: EMAIL_USERNAME
+        value: dv-sentinel
+    
+    # Health check
+    healthCheckPath: /health
+    
+    # Auto-deploy on push to main branch
+    branch: main
