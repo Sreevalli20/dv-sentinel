@@ -33,12 +33,14 @@ class TestCaspianManager:
     @patch('channels.caspian.config.CASPIAN_BASE_URL', 'https://api.test.com')
     def test_successful_initialization(self):
         """Test successful Caspian SDK initialization."""
+        import sys
+        mock_caspian_module = MagicMock()
         mock_caspian = MagicMock()
-        mock_thread = MagicMock()
-        mock_message = MagicMock()
-        mock_context = MagicMock()
+        mock_caspian_module.Caspian.return_value = mock_caspian
+        mock_caspian_module.Message = MagicMock()
+        mock_caspian_module.Thread = MagicMock()
         
-        with patch('caspian.facade.caspian.Caspian', return_value=mock_caspian) as mock_caspian_class:
+        with patch.dict('sys.modules', {'caspian': mock_caspian_module}):
             manager = CaspianManager()
             handler = Mock()
             
@@ -47,14 +49,17 @@ class TestCaspianManager:
             assert result is True
             assert manager._initialized is True
             assert manager.cx is not None
-            mock_caspian_class.assert_called_once()
+            mock_caspian_module.Caspian.assert_called_once()
             mock_caspian.on_message.assert_called_once()
     
     @patch('channels.caspian.config.DEMO_MODE', False)
     @patch('channels.caspian.config.CASPIAN_API_KEY', 'test_key')
     def test_import_error_handling(self):
         """Test handling of Caspian SDK import error."""
-        with patch('caspian.facade.caspian.Caspian', side_effect=ImportError("No module named 'caspian'")):
+        import sys
+        with patch.dict('sys.modules', {}, clear=False):
+            # Remove caspian from sys.modules to force ImportError
+            sys.modules.pop('caspian', None)
             manager = CaspianManager()
             handler = Mock()
             result = manager.initialize(handler)
@@ -72,10 +77,15 @@ class TestCaspianManager:
     @patch('channels.caspian.config.CASPIAN_BASE_URL', 'https://api.test.com')
     def test_add_email_channel_success(self):
         """Test successful email channel registration."""
+        import sys
+        mock_caspian_module = MagicMock()
         mock_caspian = MagicMock()
+        mock_caspian_module.Caspian.return_value = mock_caspian
+        mock_caspian_module.Message = MagicMock()
+        mock_caspian_module.Thread = MagicMock()
         mock_caspian.channels.add.return_value = "testuser@agents.trycaspianai.com"
         
-        with patch('caspian.facade.caspian.Caspian', return_value=mock_caspian):
+        with patch.dict('sys.modules', {'caspian': mock_caspian_module}):
             manager = CaspianManager()
             handler = Mock()
             manager.initialize(handler)
@@ -92,10 +102,15 @@ class TestCaspianManager:
     @patch('channels.caspian.config.CASPIAN_BASE_URL', 'https://api.test.com')
     def test_add_email_channel_dict_response(self):
         """Test email channel registration with dict response."""
+        import sys
+        mock_caspian_module = MagicMock()
         mock_caspian = MagicMock()
+        mock_caspian_module.Caspian.return_value = mock_caspian
+        mock_caspian_module.Message = MagicMock()
+        mock_caspian_module.Thread = MagicMock()
         mock_caspian.channels.add.return_value = {"address": "testuser@agents.trycaspianai.com"}
         
-        with patch('caspian.facade.caspian.Caspian', return_value=mock_caspian):
+        with patch.dict('sys.modules', {'caspian': mock_caspian_module}):
             manager = CaspianManager()
             handler = Mock()
             manager.initialize(handler)
@@ -116,9 +131,14 @@ class TestCaspianManager:
     @patch('channels.caspian.config.CASPIAN_BASE_URL', 'https://api.test.com')
     def test_add_telegram_channel_success(self):
         """Test successful Telegram channel registration."""
+        import sys
+        mock_caspian_module = MagicMock()
         mock_caspian = MagicMock()
+        mock_caspian_module.Caspian.return_value = mock_caspian
+        mock_caspian_module.Message = MagicMock()
+        mock_caspian_module.Thread = MagicMock()
         
-        with patch('caspian.facade.caspian.Caspian', return_value=mock_caspian):
+        with patch.dict('sys.modules', {'caspian': mock_caspian_module}):
             manager = CaspianManager()
             handler = Mock()
             manager.initialize(handler)
@@ -134,10 +154,15 @@ class TestCaspianManager:
     @patch('channels.caspian.config.CASPIAN_BASE_URL', 'https://api.test.com')
     def test_add_telegram_channel_failure(self):
         """Test Telegram channel registration failure."""
+        import sys
+        mock_caspian_module = MagicMock()
         mock_caspian = MagicMock()
+        mock_caspian_module.Caspian.return_value = mock_caspian
+        mock_caspian_module.Message = MagicMock()
+        mock_caspian_module.Thread = MagicMock()
         mock_caspian.channels.add.side_effect = Exception("Invalid token")
         
-        with patch('caspian.facade.caspian.Caspian', return_value=mock_caspian):
+        with patch.dict('sys.modules', {'caspian': mock_caspian_module}):
             manager = CaspianManager()
             handler = Mock()
             manager.initialize(handler)
@@ -152,9 +177,14 @@ class TestCaspianManager:
     @patch('channels.caspian.config.CASPIAN_BASE_URL', 'https://api.test.com')
     def test_run_event_loop(self):
         """Test running Caspian event loop."""
+        import sys
+        mock_caspian_module = MagicMock()
         mock_caspian = MagicMock()
+        mock_caspian_module.Caspian.return_value = mock_caspian
+        mock_caspian_module.Message = MagicMock()
+        mock_caspian_module.Thread = MagicMock()
         
-        with patch('caspian.facade.caspian.Caspian', return_value=mock_caspian):
+        with patch.dict('sys.modules', {'caspian': mock_caspian_module}):
             manager = CaspianManager()
             handler = Mock()
             manager.initialize(handler)
@@ -169,9 +199,14 @@ class TestCaspianManager:
     @patch('channels.caspian.config.CASPIAN_BASE_URL', 'https://api.test.com')
     def test_start_in_background(self):
         """Test starting event loop in background thread."""
+        import sys
+        mock_caspian_module = MagicMock()
         mock_caspian = MagicMock()
+        mock_caspian_module.Caspian.return_value = mock_caspian
+        mock_caspian_module.Message = MagicMock()
+        mock_caspian_module.Thread = MagicMock()
         
-        with patch('caspian.facade.caspian.Caspian', return_value=mock_caspian):
+        with patch.dict('sys.modules', {'caspian': mock_caspian_module}):
             manager = CaspianManager()
             handler = Mock()
             manager.initialize(handler)
@@ -220,9 +255,14 @@ class TestCaspianManager:
     @patch('channels.caspian.config.CASPIAN_BASE_URL', 'https://api.test.com')
     def test_message_handler_routing(self):
         """Test that message handler is registered correctly."""
+        import sys
+        mock_caspian_module = MagicMock()
         mock_caspian = MagicMock()
+        mock_caspian_module.Caspian.return_value = mock_caspian
+        mock_caspian_module.Message = MagicMock()
+        mock_caspian_module.Thread = MagicMock()
         
-        with patch('caspian.facade.caspian.Caspian', return_value=mock_caspian):
+        with patch.dict('sys.modules', {'caspian': mock_caspian_module}):
             manager = CaspianManager()
             mock_dv_handler = Mock()
             mock_dv_handler.handle_message.return_value = "response"

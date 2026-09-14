@@ -37,9 +37,7 @@ class CaspianManager:
             return False
         
         try:
-            from caspian.facade.caspian import Caspian
-            from caspian.facade.thread import Thread
-            from caspian.core import Message
+            from caspian import Caspian, Message, Thread
             
             print("[Caspian] Initializing SDK...")
             self.cx = Caspian(
