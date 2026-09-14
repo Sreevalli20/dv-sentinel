@@ -3,7 +3,7 @@ fastapi==0.109.0
 uvicorn[standard]==0.27.0
 
 # Caspian SDK
-caspian-sdk==1.0.2
+caspian
 
 # Testing
 pytest==7.4.4
