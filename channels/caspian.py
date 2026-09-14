@@ -37,7 +37,9 @@ class CaspianManager:
             return False
         
         try:
-            from caspian import Caspian, HandlerContext, Message, Thread
+            from caspian.facade.caspian import Caspian
+            from caspian.facade.thread import Thread
+            from caspian.core import Message
             
             print("[Caspian] Initializing SDK...")
             self.cx = Caspian(
@@ -47,7 +49,7 @@ class CaspianManager:
             
             # Register message handler for all channels
             @self.cx.on_message({"channel": "*"})
-            def handle_caspian_message(thread: Thread, msg: Message, ctx: HandlerContext) -> None:
+            def handle_caspian_message(thread: Thread, msg: Message, ctx) -> None:
                 message_handler(thread, msg, ctx)
             
             self._initialized = True
