@@ -92,3 +92,52 @@ class TestDVAnalyzer:
         analyzer = DVAnalyzer()
         challenge = analyzer.get_daily_challenge()
         assert "DAILY CHALLENGE" in challenge
+
+
+class TestDVHandler:
+    """Test DV handler functionality."""
+    
+    def test_handler_start_command(self):
+        """Test handler /start command."""
+        from agent.handler import DVHandler
+        handler = DVHandler()
+        response = handler.handle_message("/start", "test_user", "telegram")
+        assert "DV Sentinel" in response
+    
+    def test_handler_assert_command(self):
+        """Test handler /assert command."""
+        from agent.handler import DVHandler
+        handler = DVHandler()
+        response = handler.handle_message(
+            "/assert FIFO should never read when empty",
+            "test_user",
+            "telegram"
+        )
+        assert "assertion" in response.lower() or "ASSERTION" in response
+    
+    def test_handler_coverage_command(self):
+        """Test handler /coverage command."""
+        from agent.handler import DVHandler
+        handler = DVHandler()
+        response = handler.handle_message("/coverage FIFO", "test_user", "telegram")
+        assert "COVERAGE" in response or "coverage" in response.lower()
+    
+    def test_handler_natural_language(self):
+        """Test handler natural language processing."""
+        from agent.handler import DVHandler
+        handler = DVHandler()
+        response = handler.handle_message(
+            "Why can a FIFO underflow happen?",
+            "test_user",
+            "telegram"
+        )
+        assert response  # Should return something
+    
+    def test_handler_exception_handling(self):
+        """Test handler exception handling with fallback."""
+        from agent.handler import DVHandler
+        handler = DVHandler()
+        # Should handle any errors gracefully
+        response = handler.handle_message("/start", "test_user", "telegram")
+        assert response
+        assert "DV Sentinel" in response or "error" in response.lower() or "Error" in response

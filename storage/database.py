@@ -14,6 +14,12 @@ class DatabaseManager:
         self.db_path = db_path if db_path else config.DATABASE_PATH
         self._conn = None
         self._init_db()
+        # Keep connection alive for faster operations
+        if not self._conn and self.db_path != ":memory:":
+            try:
+                self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            except Exception:
+                pass
     
     def _init_db(self):
         """Initialize database schema."""

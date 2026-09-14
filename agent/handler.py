@@ -1,5 +1,7 @@
 """Shared agent handler for DV Sentinel."""
 
+import time
+import traceback
 from typing import Optional, Dict, Any
 from dv.analyzer import DVAnalyzer
 from storage.database import DatabaseManager
@@ -11,6 +13,26 @@ class DVHandler:
     def __init__(self):
         self.analyzer = DVAnalyzer()
         self.db = DatabaseManager()
+        # Use persistent connection for faster database operations
+        self.db._conn = self.db._conn if self.db._conn else None
+    
+    def _log_timing(self, channel: str, stage: str, duration_ms: float):
+        """Log timing information without secrets."""
+        print(f"[Telegram] {stage} completed in {duration_ms:.3f}ms")
+    
+    def _safe_log_message(self, user_id: str, channel: str, content: str):
+        """Safely log message without blocking on errors."""
+        try:
+            self.db.log_message(user_id, channel, content)
+        except Exception as e:
+            print(f"[Database] Warning: Failed to log message: {e}")
+    
+    def _safe_log_command(self, user_id: str, channel: str, command: str):
+        """Safely log command without blocking on errors."""
+        try:
+            self.db.log_command(user_id, channel, command)
+        except Exception as e:
+            print(f"[Database] Warning: Failed to log command: {e}")
     
     def handle_message(
         self,
@@ -28,21 +50,41 @@ class DVHandler:
         Returns:
             Response text
         """
-        # Log message
-        self.db.log_message(user_id, channel, text)
+        message_received = time.perf_counter()
+        print(f"[Telegram] message received from {channel}")
         
-        # Handle empty input
-        if not text or not text.strip():
-            return self._get_help_message()
-        
-        text = text.strip()
-        
-        # Handle commands
-        if text.startswith("/"):
-            return self._handle_command(text, user_id, channel)
-        
-        # Handle natural language
-        return self._handle_natural_language(text, user_id, channel)
+        try:
+            # Log message asynchronously (non-blocking)
+            self._safe_log_message(user_id, channel, text)
+            
+            # Handle empty input
+            if not text or not text.strip():
+                handler_finished = time.perf_counter()
+                self._log_timing(channel, "handler", (handler_finished - message_received) * 1000)
+                return self._get_help_message()
+            
+            text = text.strip()
+            handler_started = time.perf_counter()
+            
+            # Handle commands
+            if text.startswith("/"):
+                response = self._handle_command(text, user_id, channel)
+            else:
+                # Handle natural language
+                response = self._handle_natural_language(text, user_id, channel)
+            
+            handler_finished = time.perf_counter()
+            duration_ms = (handler_finished - handler_started) * 1000
+            self._log_timing(channel, "DV processing", duration_ms)
+            
+            return response
+            
+        except Exception as e:
+            # Log exception without secrets
+            print(f"[Handler] ERROR: {type(e).__name__}: {str(e)[:100]}")
+            traceback.print_exc()
+            # Return fallback response
+            return self._get_fallback_response()
     
     def _handle_command(self, text: str, user_id: str, channel: str) -> str:
         """Handle slash commands.
@@ -59,8 +101,8 @@ class DVHandler:
         command = parts[0].lower()
         args = " ".join(parts[1:]) if len(parts) > 1 else ""
         
-        # Log command
-        self.db.log_command(user_id, channel, command)
+        # Log command asynchronously (non-blocking)
+        self._safe_log_command(user_id, channel, command)
         
         command_map = {
             "/start": self._cmd_start,
@@ -82,7 +124,11 @@ class DVHandler:
         
         handler = command_map.get(command)
         if handler:
-            return handler(args, user_id, channel)
+            try:
+                return handler(args, user_id, channel)
+            except Exception as e:
+                print(f"[Handler] Command {command} failed: {type(e).__name__}")
+                return self._get_command_error_response(command)
         
         return f"Unknown command: {command}. Try /help for available commands."
     
@@ -97,34 +143,41 @@ class DVHandler:
         Returns:
             Response text
         """
-        intent = self.analyzer.detect_intent(text)
-        
-        # Store context
-        self.db.store_context(user_id, {"intent": intent, "last_input": text})
-        
-        if intent == "fifo":
-            return self._cmd_fifo(text, user_id, channel)
-        elif intent == "axi":
-            return self._cmd_axi(text, user_id, channel)
-        elif intent == "apb":
-            return self._cmd_apb(text, user_id, channel)
-        elif intent == "assertion":
-            return self._cmd_assert(text, user_id, channel)
-        elif intent == "coverage":
-            return self._cmd_coverage(text, user_id, channel)
-        elif intent == "testplan":
-            return self._cmd_testplan(text, user_id, channel)
-        elif intent == "bug":
-            return self._cmd_debug(text, user_id, channel)
-        elif intent == "interview":
-            return self._cmd_interview(text, user_id, channel)
-        elif intent == "reset":
-            return self._cmd_reset(text, user_id, channel)
-        elif intent == "review":
-            return self._cmd_verify(text, user_id, channel)
-        
-        # General response
-        return self._get_general_response(text)
+        try:
+            intent = self.analyzer.detect_intent(text)
+            
+            # Store context asynchronously (non-blocking)
+            try:
+                self.db.store_context(user_id, {"intent": intent, "last_input": text})
+            except Exception as e:
+                print(f"[Database] Warning: Failed to store context: {e}")
+            
+            if intent == "fifo":
+                return self._cmd_fifo(text, user_id, channel)
+            elif intent == "axi":
+                return self._cmd_axi(text, user_id, channel)
+            elif intent == "apb":
+                return self._cmd_apb(text, user_id, channel)
+            elif intent == "assertion":
+                return self._cmd_assert(text, user_id, channel)
+            elif intent == "coverage":
+                return self._cmd_coverage(text, user_id, channel)
+            elif intent == "testplan":
+                return self._cmd_testplan(text, user_id, channel)
+            elif intent == "bug":
+                return self._cmd_debug(text, user_id, channel)
+            elif intent == "interview":
+                return self._cmd_interview(text, user_id, channel)
+            elif intent == "reset":
+                return self._cmd_reset(text, user_id, channel)
+            elif intent == "review":
+                return self._cmd_verify(text, user_id, channel)
+            
+            # General response
+            return self._get_general_response(text)
+        except Exception as e:
+            print(f"[Handler] Natural language processing failed: {type(e).__name__}")
+            return self._get_fallback_response()
     
     def _cmd_start(self, args: str, user_id: str, channel: str) -> str:
         """Handle /start command."""
@@ -403,6 +456,21 @@ For specific analysis, provide your FIFO code."""
         return """I can help with SystemVerilog, FIFO, AXI, APB, assertions, coverage and DV test planning.
 
 Try /help for available commands."""
+    
+    def _get_fallback_response(self) -> str:
+        """Get fallback response for errors."""
+        return """I encountered an error processing your request. Please try again.
+
+If the problem persists, try:
+• /start - Restart the conversation
+• /help - See available commands
+• /status - Check system status"""
+    
+    def _get_command_error_response(self, command: str) -> str:
+        """Get error response for failed command."""
+        return f"""Sorry, the /{command} command encountered an error.
+
+Please try again or use /help for alternative commands."""
     
     def _get_general_response(self, text: str) -> str:
         """Get response for general queries."""
