@@ -1,5 +1,5 @@
 # DV Sentinel
-#t.me/dv_sentinel_engineer_bot
+t.me/dv_sentinel_engineer_bot
 
 **Domain-specific Design Verification Engineer accessible through communication channels you already use.**
 
