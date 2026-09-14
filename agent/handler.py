@@ -144,37 +144,17 @@ class DVHandler:
             Response text
         """
         try:
-            intent = self.analyzer.detect_intent(text)
+            # Use enhanced intelligent response generation
+            response = self.analyzer.generate_intelligent_response(text)
             
             # Store context asynchronously (non-blocking)
             try:
-                self.db.store_context(user_id, {"intent": intent, "last_input": text})
+                domain, sub_intent, metadata = self.analyzer.classify_intent(text)
+                self.db.store_context(user_id, {"domain": domain, "sub_intent": sub_intent, "last_input": text})
             except Exception as e:
                 print(f"[Database] Warning: Failed to store context: {e}")
             
-            if intent == "fifo":
-                return self._cmd_fifo(text, user_id, channel)
-            elif intent == "axi":
-                return self._cmd_axi(text, user_id, channel)
-            elif intent == "apb":
-                return self._cmd_apb(text, user_id, channel)
-            elif intent == "assertion":
-                return self._cmd_assert(text, user_id, channel)
-            elif intent == "coverage":
-                return self._cmd_coverage(text, user_id, channel)
-            elif intent == "testplan":
-                return self._cmd_testplan(text, user_id, channel)
-            elif intent == "bug":
-                return self._cmd_debug(text, user_id, channel)
-            elif intent == "interview":
-                return self._cmd_interview(text, user_id, channel)
-            elif intent == "reset":
-                return self._cmd_reset(text, user_id, channel)
-            elif intent == "review":
-                return self._cmd_verify(text, user_id, channel)
-            
-            # General response
-            return self._get_general_response(text)
+            return response
         except Exception as e:
             print(f"[Handler] Natural language processing failed: {type(e).__name__}")
             return self._get_fallback_response()

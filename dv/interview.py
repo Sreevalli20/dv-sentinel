@@ -144,6 +144,87 @@ class InterviewGenerator:
         return random.choice(questions)
     
     @classmethod
+    def evaluate_answer(cls, question: str, user_answer: str) -> Dict[str, str]:
+        """Evaluate user's interview answer.
+        
+        Args:
+            question: The question asked
+            user_answer: User's answer
+            
+        Returns:
+            Dictionary with evaluation results
+        """
+        # Find the question in our database
+        qa = None
+        for topic_questions in cls.QUESTIONS.values():
+            for q in topic_questions:
+                if q["question"] == question:
+                    qa = q
+                    break
+            if qa:
+                break
+        
+        if not qa:
+            return {
+                "correctness": "unknown",
+                "missing_points": "Question not found in database",
+                "stronger_answer": "",
+                "interviewer_feedback": "I don't have this question in my database.",
+                "difficulty": "unknown"
+            }
+        
+        # Simple keyword-based evaluation
+        answer_lower = user_answer.lower()
+        expected_lower = qa["answer"].lower()
+        
+        # Check for key concepts
+        key_concepts = []
+        if "blocking" in expected_lower and "non-blocking" in expected_lower:
+            if "blocking" in answer_lower and "non-blocking" in answer_lower:
+                key_concepts.append("blocking vs non-blocking")
+            else:
+                key_concepts.append("missing: blocking vs non-blocking distinction")
+        
+        if "sequential" in expected_lower and "combinational" in expected_lower:
+            if "sequential" in answer_lower and "combinational" in answer_lower:
+                key_concepts.append("sequential vs combinational")
+            else:
+                key_concepts.append("missing: sequential vs combinational use cases")
+        
+        # Determine correctness
+        if len([c for c in key_concepts if "missing" not in c]) >= 2:
+            correctness = "good"
+            feedback = "Good answer covering key concepts."
+        elif len([c for c in key_concepts if "missing" not in c]) >= 1:
+            correctness = "acceptable"
+            feedback = "Acceptable answer but could be more comprehensive."
+        else:
+            correctness = "needs_improvement"
+            feedback = "Answer needs more technical depth."
+        
+        missing_points = [c for c in key_concepts if "missing" in c]
+        
+        return {
+            "correctness": correctness,
+            "missing_points": "; ".join(missing_points) if missing_points else "None",
+            "stronger_answer": f"Consider adding: {'; '.join(missing_points)}" if missing_points else "Your answer is comprehensive.",
+            "interviewer_feedback": feedback,
+            "difficulty": cls._assess_difficulty(question)
+        }
+    
+    @classmethod
+    def _assess_difficulty(cls, question: str) -> str:
+        """Assess question difficulty."""
+        question_lower = question.lower()
+        
+        if any(word in question_lower for word in ["difference", "what is", "what are"]):
+            return "junior"
+        elif any(word in question_lower for word in ["explain", "how", "why"]):
+            return "mid-level"
+        else:
+            return "senior"
+    
+    @classmethod
     def get_topics(cls) -> List[str]:
         """Get available interview topics."""
         return list(cls.QUESTIONS.keys())
