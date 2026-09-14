@@ -2,7 +2,8 @@
 
 import os
 import threading
-from typing import Optional, Callable
+import time
+from typing import Optional, Callable, Any
 from app.config import config
 
 
@@ -17,6 +18,10 @@ class CaspianManager:
         self._email_address = None
         self._running = False
         self._run_thread = None
+        self._stop_event = threading.Event()
+        self._last_poll_time = None
+        self._poll_error_count = 0
+        self._telegram_connection_id = None
     
     def initialize(self, message_handler: Callable) -> bool:
         """Initialize Caspian SDK.
@@ -37,7 +42,10 @@ class CaspianManager:
             return False
         
         try:
-            from caspian import Caspian, Message, Thread
+            from caspian.facade.caspian import Caspian
+            from caspian.facade.host import HandlerContext
+            from caspian.facade.thread import Thread
+            from caspian.core.types import Message
             
             print("[Caspian] Initializing SDK...")
             self.cx = Caspian(
@@ -46,8 +54,8 @@ class CaspianManager:
             )
             
             # Register message handler for all channels
-            @self.cx.on_message({"channel": "*"})
-            def handle_caspian_message(thread: Thread, msg: Message, ctx) -> None:
+            @self.cx.on_message()
+            def handle_caspian_message(thread: Thread, msg: Message, ctx: HandlerContext) -> None:
                 message_handler(thread, msg, ctx)
             
             self._initialized = True
@@ -108,10 +116,16 @@ class CaspianManager:
             return False
         
         try:
-            print("[Caspian] Adding Telegram channel...")
-            self.cx.channels.add("telegram", bot_token=bot_token)
+            print("[Caspian] Telegram registration started")
+            result = self.cx.channels.add("telegram", bot_token=bot_token)
+            # Result may be a dict with connection info or just success
+            if isinstance(result, dict):
+                conn_id = result.get("id") or result.get("connection_id")
+                if conn_id:
+                    self._telegram_connection_id = conn_id
+                    print(f"[Caspian] Telegram connection ID: {conn_id[:8]}...")
             self._telegram_registered = True
-            print("[Caspian] Telegram channel registered successfully")
+            print("[Caspian] Telegram registration successful")
             return True
         except Exception as e:
             print(f"[Caspian] ERROR: Telegram channel addition failed: {e}")
@@ -120,13 +134,29 @@ class CaspianManager:
     def run(self):
         """Start the Caspian event loop (blocking)."""
         if self._initialized and self.cx:
-            print("[Caspian] Starting event loop...")
+            print("[Caspian] Event loop starting")
             self._running = True
+            self._stop_event.clear()
             try:
-                self.cx.run()
+                while not self._stop_event.is_set():
+                    self._last_poll_time = time.time()
+                    # Run one iteration with short interval
+                    results = self.cx.run(max_iterations=1, interval=1.0)
+                    # Check for errors in results
+                    for result in results:
+                        if not result.is_ok:
+                            self._poll_error_count += 1
+                            if self._poll_error_count <= 5:  # Limit error spam
+                                print(f"[Caspian] Poll error: {result.error}")
+                        else:
+                            self._poll_error_count = 0  # Reset on success
             except Exception as e:
-                print(f"[Caspian] ERROR: Event loop failed: {e}")
+                print(f"[Caspian] Event loop stopped unexpectedly: {e}")
                 self._running = False
+                raise
+            finally:
+                self._running = False
+                print("[Caspian] Event loop stopped")
     
     def start_in_background(self):
         """Start Caspian event loop in a background thread."""
@@ -139,9 +169,29 @@ class CaspianManager:
             return True
         
         print("[Caspian] Starting event loop in background thread...")
+        self._stop_event.clear()
         self._run_thread = threading.Thread(target=self.run, daemon=False)
         self._run_thread.start()
         return True
+    
+    def stop(self):
+        """Stop the Caspian event loop."""
+        if self._running:
+            print("[Caspian] Stopping event loop...")
+            self._stop_event.set()
+            if self._run_thread and self._run_thread.is_alive():
+                self._run_thread.join(timeout=5.0)
+            self._running = False
+            print("[Caspian] Event loop stopped")
+    
+    def get_poll_status(self) -> dict[str, Any]:
+        """Get current polling status for health checks."""
+        return {
+            "running": self._running,
+            "last_poll_time": self._last_poll_time,
+            "error_count": self._poll_error_count,
+            "telegram_connection_id": self._telegram_connection_id[:8] + "..." if self._telegram_connection_id else None,
+        }
     
     def is_available(self) -> bool:
         """Check if Caspian is available."""
@@ -149,7 +199,13 @@ class CaspianManager:
     
     def is_running(self) -> bool:
         """Check if Caspian event loop is running."""
-        return self._running
+        if not self._running:
+            return False
+        # Check if thread is actually alive
+        if self._run_thread and not self._run_thread.is_alive():
+            self._running = False
+            return False
+        return True
     
     def get_email_address(self) -> Optional[str]:
         """Get registered email address."""
